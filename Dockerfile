@@ -1,20 +1,21 @@
-# Base image with Python
-FROM python:3.11-slim
+FROM python:3.11
 
-# Set working directory inside the container
-WORKDIR /app
-
-# Copy requirements file and bot script
-COPY requirements.txt /app/
-COPY app.py /app/
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
 
 # Set environment variables (Replace these with real values during build or use Docker secrets)
-ENV BLUESKY_USERNAME="your_bluesky_handle"
-ENV BLUESKY_PASSWORD="your_password"
-ENV OPENAI_API_KEY="your_openai_api_key"
+ENV GROQ_API_KEY=$GROQ_API_KEY
+ENV BLUESKY_USERNAME=$BLUESKY_USERNAME
+ENV BLUESKY_PASSWORD=$BLUESKY_PASSWORD
+ENV CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME
+ENV CLOUDINARY_API_KEY=$CLOUDINARY_API_KEY
+ENV CLOUDINARY_API_SECRET=$CLOUDINARY_API_SECRET
 
-# Run the bot script
+WORKDIR /app
+
+COPY --chown=user ./requirements.txt requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+
+COPY --chown=user . /app
 CMD ["python", "app.py"]

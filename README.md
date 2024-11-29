@@ -2,5 +2,6 @@
 A twitter AI agent to generate ebook on given topic by client
 
 
-1> get bot mention from @ or #
-2> reply to mention using media bot using pdf
+hugging face link
+
+https://huggingface.co/spaces/suryanshp1/bsky-bot
