@@ -1,23 +1,17 @@
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field, validator
-from typing import Optional
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
-from atproto import Client, models
-from cloudinary.uploader import upload
-import cloudinary
-import traceback
-import logging
-import os
 from dotenv import load_dotenv
-import datetime
-from fpdf import FPDF, HTMLMixin
-from fpdf.enums import XPos, YPos
-import gc
-import time
-import json
-import markdown2
-from docx import Document
+import os
 
+load_dotenv()
 
+system = "You are a helpful assistant."
+human = "{text}"
+prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
+
+chat = ChatGroq(temperature=0, groq_api_key=os.getenv("GROQ_API_KEY1"), model_name="mixtral-8x7b-32768", max_tokens=250)
+
+chain = prompt | chat
+x = chain.invoke({"text": "Explain the importance of low latency LLMs."})
+
+print(x.content)
