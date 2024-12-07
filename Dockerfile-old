@@ -1,0 +1,21 @@
+FROM python:3.11
+
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+
+# Set environment variables (Replace these with real values during build or use Docker secrets)
+ENV GROQ_API_KEY=$GROQ_API_KEY
+ENV BLUESKY_USERNAME=$BLUESKY_USERNAME
+ENV BLUESKY_PASSWORD=$BLUESKY_PASSWORD
+ENV CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME
+ENV CLOUDINARY_API_KEY=$CLOUDINARY_API_KEY
+ENV CLOUDINARY_API_SECRET=$CLOUDINARY_API_SECRET
+
+WORKDIR /app
+
+COPY --chown=user ./requirements.txt requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+
+COPY --chown=user . /app
+CMD ["python", "app.py"]
