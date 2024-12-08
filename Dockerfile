@@ -6,10 +6,6 @@ LABEL maintainer="Suryansh Pandey" \
       version="1.0" \
       description="eBook Generator Application"
 
-# Create a non-root user with a specific UID and GID
-RUN addgroup --system --gid 1000 appuser && \
-    adduser --system --uid 1000 --ingroup appuser appuser
-
 # Set working directory
 WORKDIR /app
 
@@ -17,6 +13,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user with a specific UID and GID
+RUN addgroup --system --gid 1000 appuser && \
+    adduser --system --uid 1000 --ingroup appuser appuser
+
+# Create logs directory with appropriate permissions
+RUN mkdir -p /app/logs && \
+    chown -R appuser:appuser /app
 
 # Copy only requirements first to leverage Docker cache
 COPY --chown=appuser:appuser requirements.txt .
@@ -35,14 +39,8 @@ ENV GROQ_API_KEY=$GROQ_API_KEY \
     BLUESKY_PASSWORD=$BLUESKY_PASSWORD \
     CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME \
     CLOUDINARY_API_KEY=$CLOUDINARY_API_KEY \
-    CLOUDINARY_API_SECRET=$CLOUDINARY_API_SECRET
-
-# Use the non-root user
-USER appuser
-
-# Use a more explicit health check command if possible
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
+    CLOUDINARY_API_SECRET=$CLOUDINARY_API_SECRET \
+    LOG_DIR=/app/logs
 
 # Set the default command
 CMD ["python", "-u", "app.py"]

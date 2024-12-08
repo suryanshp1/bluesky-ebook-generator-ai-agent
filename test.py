@@ -1,7 +1,9 @@
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
-from langchain_core.prompts import ChatPromptTemplate
+from langchain.text_splitter import CharacterTextSplitter
+from datetime import datetime
+from langchain.chains import LLMChain
 from pydantic import BaseModel, Field, validator
 from typing import Optional
 from langchain_groq import ChatGroq
@@ -18,20 +20,43 @@ from docx import Document
 import gc
 import time
 import json
+import random
+import schedule
 import markdown2
 import ast
+from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 
 # Set up the logger
-logging.basicConfig(
-    filename="app.log",  # log file name
-    level=logging.INFO,  # log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+# logging.basicConfig(
+#     filename="app.log",  # log file name
+#     level=logging.INFO,  # log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+# )
+
+# # Create a logger instance
+# logger = logging.getLogger(__name__)
+
+# Set up the RotatingFileHandler
+log_file = "app.log"
+rotating_handler = RotatingFileHandler(
+    filename=log_file, 
+    maxBytes=5 * 1024 * 1024,  # 5 MB per log file
+    backupCount=5,  # Keep the last 5 log files
 )
 
-# Create a logger instance
+# Configure the logging format
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+rotating_handler.setFormatter(formatter)
+
+# Set up the logger
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set the minimum logging level
+logger.addHandler(rotating_handler)
+
+# Example usage
+logger.info("Bot has started successfully.")
 
 
 class Config:
@@ -130,7 +155,7 @@ class EbookInstructions(BaseModel):
     )
     is_suggestion: int = Field(
         default=0, 
-        description="Whether to suggest something (1) or not (0). If user wants suggestion, it should be 1."
+        description="Whether to suggest something (1) or not (0). If user wants suggestion or if it is not related to ebook generation, it should be 1. only if it is related to ebook generation, it should be 0."
     )
     title: Optional[str] = Field(
         default=None, 
@@ -546,24 +571,59 @@ class EbookGenerator:
             raise e
 
 
-def reply_with_pdf(mention: dict):
+def reply_with_bot(mention: dict):
     """Reply to a mention with a PDF eBook."""
     try:
         logger.info("Processing mention reply_with_pdf ...")
         # Extract topic from the mention text
         text = mention.record.text
         words = text.split()
-        topic = " ".join(words[1:])  # Assuming the topic is after the bot mention
-        logger.info(f"Topic: {topic}")
+        mentioned_text = " ".join(words[1:])  # Assuming the topic is after the bot mention
+        suggested_text = None
+        public_id = None
 
-        # Generate content and create ebook file
-        file_path = EbookGenerator().generate_ebook_task(topic)
-        logger.info(f"file path: {file_path}")
-
-        # Upload PDF to Cloudinary
-        download_url, public_id = upload_to_cloudinary(file_path, topic)
+        result = extract_ebook_instructions(mentioned_text)
+        extracted_instructions = json.loads(result.model_dump_json())
+        logger.info(f"Topic: {extracted_instructions.get('title')}")
         
-        logger.info(f"PDF uploaded to: {download_url}")
+        if extracted_instructions.get("is_suggestion") == 1:
+
+            # Initialize Groq LLM
+            llm = ChatGroq(api_key=os.getenv("GROQ_API_KEY1"), model_name="mixtral-8x7b-32768")
+
+            # Create a prompt template
+            prompt_template = PromptTemplate(
+                input_variables=["question"],
+                template="Provide a concise and to-the-point answer to the following question in no more than 280 characters: {question}"
+            )
+
+            # Create an LLM chain
+            chain = LLMChain(llm=llm, prompt=prompt_template)
+
+            # Generate response
+            suggested_text = chain.run(mentioned_text)
+
+            # Ensure response is within character limit
+            if len(suggested_text) > 280:
+                # If too long, split and take the first part
+                splitter = CharacterTextSplitter(
+                    separator="\n",
+                    chunk_size=280,
+                    chunk_overlap=0,
+                    length_function=len,
+                )
+                chunks = splitter.split_text(suggested_text)
+                suggested_text = chunks[0]
+        else:
+            # Generate content and create ebook file
+
+            file_path = EbookGenerator.generate_ebook_task(extracted_instructions)
+            logger.info(f"file path: {file_path}")
+
+            # Upload PDF to Cloudinary
+            download_url, public_id = upload_to_cloudinary(file_path, extracted_instructions.get('title'))
+            
+            logger.info(f"PDF uploaded to: {download_url}")
 
         try:
             # Create proper reply reference
@@ -572,29 +632,37 @@ def reply_with_pdf(mention: dict):
                 "parent": {"cid": mention.cid, "uri": mention.uri},
             }
 
-            # Create the embed external object with the download link
-            embed = models.AppBskyEmbedExternal.Main(
-                external=models.AppBskyEmbedExternal.External(
-                    title=f"Ebook: {topic}",
-                    description="Click to download your generated ebook",
-                    uri=download_url,
-                    thumb=None,
+            if not suggested_text:
+                # Create the embed external object with the download link
+                embed = models.AppBskyEmbedExternal.Main(
+                    external=models.AppBskyEmbedExternal.External(
+                        title=f"Ebook: {extracted_instructions.get('title')}",
+                        description="Click to download your generated ebook",
+                        uri=download_url,
+                        thumb=None,
+                    )
                 )
-            )
 
-            # Reply to the mention with the download link
-            client.post(
-                text=f"🤖 Here's your ebook about {topic}! 📚\nClick here to download: {download_url}",
-                reply_to=reply_ref,
-                embed=embed,
-            )
+                # Reply to the mention with the download link
+                client.post(
+                    text=f"🤖 Here's your ebook about {extracted_instructions.get('title')}! 📚\nClick here to download: {download_url}",
+                    reply_to=reply_ref,
+                    embed=embed,
+                )
 
-            logger.info(f"PDF link sent successfully!")
+                logger.info(f"PDF link sent successfully!")
 
-            # Clean up local file
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f"Local PDF file cleaned up: {file_path}")
+                # Clean up local file
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"Local PDF file cleaned up: {file_path}")
+
+            else:
+                # Reply to the mention with the download link
+                client.post(
+                    text=f"{suggested_text}",
+                    reply_to=reply_ref,
+                )
 
         except Exception as e:
             # If posting fails, clean up the uploaded file from Cloudinary
@@ -606,64 +674,246 @@ def reply_with_pdf(mention: dict):
         print(f"Error: {str(e)}")
 
 
-# def main():
-#     """Main bot loop to monitor and reply to mentions."""
-#     try:
-#         print("Bot started. Listening for mentions...")
-#         # Keep track of processed notifications
-#         processed_notifications = set()
-#         last_processed_time = datetime.datetime.now(datetime.timezone.utc)
+"""
+Bluesky Book Suggestion thread Bot
+"""
+class BlueskyBookSuggestionBot:
+    def __init__(self, post_interval_minutes=30):
+        # Initialize Bluesky client
+        self.bluesky_client = client
+        
+        # Initialize Groq LLM
+        self.llm = ChatGroq(
+            temperature=0.7, 
+            model_name="llama-3.3-70b-versatile",
+            groq_api_key=os.getenv('GROQ_API_KEY1')
+        )
+        
+        # Scheduling parameters
+        self.post_interval = post_interval_minutes
+        
+        # Tracking engagement
+        self.post_engagement_history = []
+        
+    def generate_book_topic(self):
+        """Generate an engaging book-related topic."""
+        topic_prompt = PromptTemplate(
+            input_variables=['genre'],
+            template="""
+            You are a book suggestion twitter bot. Generate a provocative, boundary-pushing book discussion topic in the {genre} genre. 
+            Create a thread that:
+            - Challenges conventional wisdom
+            - Reveals uncomfortable truths
+            - Sparks intense intellectual debate
+            - Uses a raw, unfiltered, and unapologetic tone
+            - Combines intellectual depth with viral potential
 
+            RULES:
+            - Be brutally honest
+            - Use sharp, confrontational language
+            - Expose hidden narratives
+            - Craft a hook that demands attention
+            - Make people uncomfortable enough to engage
+            - Synthesize complex ideas into razor-sharp statements
+            - Each thread part should be a punch to intellectual complacency
 
-#         while True:
-#             notifications = client.app.bsky.notification.list_notifications().notifications
+            Tone: Uncompromising. Cerebral. Confrontational.
+            Goal: Intellectual provocation that breaks echo chambers
 
-#             for note in notifications:
-#                 if (
-#                     note.reason == "mention"
-#                     and note.uri not in processed_notifications
-#                     and datetime.datetime.strptime(
-#                         note.indexed_at, "%Y-%m-%dT%H:%M:%S.%fZ"
-#                     ).replace(tzinfo=datetime.timezone.utc)
-#                     > last_processed_time
-#                 ):
-#                     reply_with_pdf(note)
-#                     processed_notifications.add(note.uri)
+            **Output Format Instructions**:  
+            - The output must be a valid Python list that contains exactly 10 thread parts as comma separated strings.
+            - Each thread part should be a properly formatted python string without any special keywords, symbols, contractions or unnecessary punctuation.
+            - Ensure threads are meaningful and follow a logical progression.
 
-#             # Limit processed notifications to prevent memory growth
-#             if len(processed_notifications) > 1000:
-#                 processed_notifications = set(list(processed_notifications)[-500:])
+            **output Format must be like below list example**:
+            ['thread part 1', 'thread part 2', 'thread part 3', 'thread part 4', 'thread part 5', 'thread part 6', 'thread part 7', 'thread part 8', 'thread part 9', 'thread part 10']
 
-#             time.sleep(2)  # Adjust the sleep duration as needed
+            Note: don't include any explanation from your side.
+            """
+        )
+        
+        # Rotate through genres to keep content diverse
+        genres = [
+            # Technology
+            'technology', 
+            'artificial intelligence', 
+            'cybersecurity', 
+            'computer science', 
+            'digital innovation',
+            'emerging technologies',
 
-#     except Exception as e:
-#         logger.exception(f"Error in main (): {e} | Traceback: {traceback.format_exc()}")
+            # Science
+            'science', 
+            'astronomy', 
+            'biology', 
+            'physics', 
+            'environmental science', 
+            'neuroscience',
+            'quantum physics',
+            'climate science',
 
+            # Mathematics
+            'mathematics', 
+            'applied mathematics', 
+            'data science', 
+            'cryptography', 
+            'statistical analysis',
+            'computational mathematics',
+
+            # Philosophy
+            'philosophy', 
+            'ethics', 
+            'political philosophy', 
+            'existentialism', 
+            'epistemology',
+            'philosophy of science',
+            'logic',
+
+            # History
+            'history', 
+            'world history', 
+            'military history', 
+            'cultural history', 
+            'ancient civilizations',
+            'modern history',
+            'diplomatic history',
+            'social movements',
+
+            # Autobiography
+            'autobiography', 
+            'scientific biography', 
+            'tech innovators', 
+            'political leadership', 
+            'explorers and pioneers',
+            'intellectual memoirs',
+            'social activists'
+        ]
+        
+        # Create chain
+        topic_chain = topic_prompt | self.llm
+        genre = random.choice(genres)
+        
+        # Generate topic
+        topic_response = topic_chain.invoke({"genre": genre})
+        return topic_response
+    
+    def create_threaded_post(self, main_topic):
+        """Create a threaded post with multiple parts."""
+        try:
+            # Parse the topic into a list of thread parts
+            topic_parts = ast.literal_eval(main_topic.content)
+            
+            if not isinstance(topic_parts, list) or len(topic_parts) < 1:
+                raise ValueError("Generated topic must be a list with at least one part.")
+            
+            # Post the root thread (first part)
+            root_post = self.bluesky_client.send_post(text=topic_parts[0])
+            
+            # Initialize parent references for threading
+            parent_uri = root_post.uri
+            parent_cid = root_post.cid
+            
+            # Iterate over the remaining parts and post them as replies
+            for part in topic_parts[1:]:
+                if part.strip():  # Skip empty parts
+                    thread_post = self.bluesky_client.send_post(
+                        text=part,
+                        reply_to={
+                            'root': {'uri': root_post.uri, 'cid': root_post.cid},
+                            'parent': {'uri': parent_uri, 'cid': parent_cid}
+                        }
+                    )
+                    
+                    # Update parent references for the next post in the thread
+                    parent_uri = thread_post.uri
+                    parent_cid = thread_post.cid
+            
+            return {"root_post": root_post, "thread_posts": []}
+    
+        except Exception as e:
+            print(f"Error creating threaded post: {e}")
+            return None
+    
+    def run_post_cycle(self):
+        """
+        Single post cycle for the bot.
+        Generates topic, creates post, and tracks engagement.
+        """
+        try:
+            # Generate book topic
+            book_topic = self.generate_book_topic()
+            
+            # Create and post threaded content
+            posted_thread = self.create_threaded_post(book_topic)
+            
+            if posted_thread:
+                # Track engagement (simulated for this example)
+                self.post_engagement_history.append({
+                    'likes': random.randint(10, 100),
+                    'post': posted_thread
+                })
+                
+                print(f"Successfully posted book discussion thread at {datetime.now()}")
+            
+        except Exception as e:
+            print(f"Error in post cycle: {e}")
+    
+    def start(self):
+        """Start the bot's posting schedule."""
+        # Schedule the post cycle
+        schedule.every(self.post_interval).minutes.do(self.run_post_cycle)
+        
+        print(f"Book Suggestion Bot started. Posting every {self.post_interval} minutes.")
+        
+    
+    def stop(self):
+        """Stops all scheduled jobs."""
+        schedule.clear()
+        print("Book Suggestion Bot stopped.")
 
 def main():
-    # generation
-    # mentioned_text = "Write an pdf ebook about Artificial Intelligence with 4 chapters in a persuasive style"
-    # suggestion
-    mentioned_text = "suggest me 10 ebook topics on Artificial Intelligence"
-    result = extract_ebook_instructions(mentioned_text)
-    extracted_instructions = json.loads(result.model_dump_json())
-    print("=============================ei===========================")
-    print(extracted_instructions)
-    if extracted_instructions.get("is_suggestion") == 1:
-        system = "You are a helpful assistant."
-        human = "{text}"
-        prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
+    """Main bot loop to monitor and reply to mentions."""
+    try:
+        print("Bot started. Listening for mentions...")
+        # Keep track of processed notifications
+        processed_notifications = set()
+        last_processed_time = datetime.datetime.now(datetime.timezone.utc)
 
-        chat = ChatGroq(temperature=0, groq_api_key=os.getenv("GROQ_API_KEY1"), model_name="mixtral-8x7b-32768", max_tokens=250)
+        # Initialize the bot with 30-minute intervals
+        bot = BlueskyBookSuggestionBot(post_interval_minutes=30)
+        # Start the bot
+        bot.start()
 
-        chain = prompt | chat
-        x = chain.invoke({"text": "Explain the importance of low latency LLMs."})
+        while True:
+            
+            notifications = client.app.bsky.notification.list_notifications().notifications
 
-        print(x.content)
-    else:
-        file_path = EbookGenerator.generate_ebook_task(extracted_instructions)
-    print("file path:\n", file_path)
+            for note in notifications:
+                if (
+                    note.reason == "mention"
+                    and note.uri not in processed_notifications
+                    and datetime.datetime.strptime(
+                        note.indexed_at, "%Y-%m-%dT%H:%M:%S.%fZ"
+                    ).replace(tzinfo=datetime.timezone.utc)
+                    > last_processed_time
+                ):
+                    reply_with_bot(note)
+                    processed_notifications.add(note.uri)
 
+            # Limit processed notifications to prevent memory growth
+            if len(processed_notifications) > 1000:
+                processed_notifications = set(list(processed_notifications)[-500:])
+
+            schedule.run_pending()
+
+            time.sleep(3)  # Adjust the sleep duration as needed
+
+    except KeyboardInterrupt as e:
+        bot.stop()
+        logger.exception(f"Error in main (): {e} | Traceback: {traceback.format_exc()}")
+    except Exception as e:
+        bot.stop()
+        logger.exception(f"Error in main (): {e} | Traceback: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
