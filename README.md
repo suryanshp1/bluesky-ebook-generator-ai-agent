@@ -29,7 +29,7 @@ text - for ebook as .txt file
 doc - for ebook as .doc file
 pdf - for ebook as .pdf file
 
-- chapters - total number of chapters in ebook (max=20 chapters)
+- chapters - total number of chapters in ebook (max=20 chapters) (range: 1-20)
 
 - writing style - Writing style of ebook. Following writing styles are supported
 
