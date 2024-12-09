@@ -34,7 +34,9 @@ COPY --chown=appuser:appuser . .
 
 # Set environment variables with default empty values
 # These can be overridden at runtime
-ENV GROQ_API_KEY=$GROQ_API_KEY \
+ENV GROQ_API_KEY1=$GROQ_API_KEY1 \
+    GROQ_API_KEY2=$GROQ_API_KEY2 \
+    GROQ_API_KEY3=$GROQ_API_KEY3 \
     BLUESKY_USERNAME=$BLUESKY_USERNAME \
     BLUESKY_PASSWORD=$BLUESKY_PASSWORD \
     CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME \

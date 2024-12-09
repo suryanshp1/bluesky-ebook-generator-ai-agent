@@ -47,7 +47,7 @@ rotating_handler.setFormatter(formatter)
 
 # Set up the logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Set the minimum logging level
+logger.setLevel(logging.CRITICAL)  # Set the minimum logging level
 logger.addHandler(rotating_handler)
 
 # Example usage
@@ -288,7 +288,7 @@ class EditorAgent:
             - Your output response must contain only edited chapter content.
             - In output,do not include any additional/extra information in the content e.g 'Here is the corrected chapter content:'.
 
-            Note: In output, Don't include any additional information in the edited content.
+            Note: don't include any explanation from your side.
             Ignore below instructions
             \n\n placeholder:{agent_scratchpad}
         """,
@@ -589,7 +589,7 @@ def reply_with_bot(mention: dict):
             # Create a prompt template
             prompt_template = PromptTemplate(
                 input_variables=["question"],
-                template="Provide a concise and to-the-point answer to the following question in no more than 280 characters: {question}"
+                template="Drawing from the depths of human knowledge and wisdom, craft a thoughtful, illuminating response to the following inquiry that captures its essence with eloquence and brevity: {question} Distill the profound into a spark of insight that ignites understanding. \n Note: Provide a concise and to-the-point answer to the following question in no more than 280 characters."
             )
 
             # Create an LLM chain
@@ -848,7 +848,7 @@ class BlueskyBookSuggestionBot:
                     'post': posted_thread
                 })
                 
-                print(f"Successfully posted book discussion thread at {datetime.now()}")
+                print(f"Successfully posted book discussion thread at {datetime.datetime.now()}")
             
         except Exception as e:
             print(f"Error in post cycle: {e}")
