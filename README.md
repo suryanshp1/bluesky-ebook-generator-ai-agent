@@ -23,9 +23,9 @@ Editor Agent: Corrects grammatical mistakes and enhances the content for clarity
 
 Also we can configure the ebook generation using following constraints
 
+```
 - format - format of generated ebook. Currently, we are supporting 3 file format
 
-```
 text - for ebook as .txt file
 doc - for ebook as .doc file
 pdf - for ebook as .pdf file
