@@ -45,14 +45,14 @@ pdf - for ebook as .pdf file
 
 Bot can reply to mentions.
 
-## Deployed here:
+# Deployed here:
 
 hugging face link
 
 https://huggingface.co/spaces/suryanshp1/bsky-bot
 
 
-## Technology Used:
+# Technology Used:
 - Python
 - langchain
 - GROQ
@@ -60,7 +60,7 @@ https://huggingface.co/spaces/suryanshp1/bsky-bot
 - Atproto
 
 
-## Examples:
+# Examples:
 
 1. Ebook generation example text
 
@@ -83,6 +83,14 @@ give me some trending topics to generate ebooks
 Who is the father of AI ?
 ```
 
-## Live Project Demo
+# Live Project Demo
 
 [Live Project Demo] [https://youtu.be/UfPzH3uEBh0]
+
+# Ebook Samples
+
+Sample PDF ebook Link : https://res.cloudinary.com/doyrfe60o/raw/upload/v1733943625/ebooks/ebooks/quantum_computing_1733943624.pdf
+
+Sample Text ebook link : https://res.cloudinary.com/doyrfe60o/raw/upload/v1733764809/ebooks/ebooks/sustainable_development_1733764809.txt
+
+Sample Doc ebook link : https://res.cloudinary.com/doyrfe60o/raw/upload/v1733686653/ebooks/ebooks/eastern_philosophy_1733686653.docx
