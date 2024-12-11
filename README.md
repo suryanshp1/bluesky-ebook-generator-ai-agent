@@ -5,12 +5,12 @@ Bot Username :
 @curosepian.bsky.social - Inkwell AI
 link : https://bsky.app/profile/curosepian.bsky.social
 
-features:
-1. Automated Thread generator :
+## features:
+### Automated Thread generator :
 
 Bot created automated thread after every 30 minutes on diffrent thought provoking topics
 
-2. Ebook generator :
+### Ebook generator :
 
 Bot can generate ebook on given topic on mention. It consists of three agents as follows
 
@@ -25,9 +25,11 @@ Also we can configure the ebook generation using following constraints
 
 - format - format of generated ebook. Currently, we are supporting 3 file format
 
+```
 text - for ebook as .txt file
 doc - for ebook as .doc file
 pdf - for ebook as .pdf file
+
 
 - chapters - total number of chapters in ebook (max=20 chapters) (range: 1-20)
 
@@ -37,20 +39,20 @@ pdf - for ebook as .pdf file
 "Persuasive", "Descriptive", "Conversational", "Satirical", 
 "Technical", "Inspirational", "Analytical", "Epic", "Normal"
 
-3. Reply on Mention :
+```
 
-Bot can reply normally or suggest books on mention.
+### Reply on Mention :
 
+Bot can reply to mentions.
 
-
-Deployed here:
+## Deployed here:
 
 hugging face link
 
 https://huggingface.co/spaces/suryanshp1/bsky-bot
 
 
-Technology Used:
+## Technology Used:
 - Python
 - langchain
 - GROQ
@@ -58,7 +60,7 @@ Technology Used:
 - Atproto
 
 
-Examples:
+## Examples:
 
 1. Ebook generation example text
 
@@ -80,3 +82,7 @@ give me some trending topics to generate ebooks
 @curosepian.bsky.social
 Who is the father of AI ?
 ```
+
+## Live Project Demo
+
+[Live Project Demo] [https://youtu.be/UfPzH3uEBh0]
